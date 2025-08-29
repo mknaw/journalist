@@ -1,4 +1,4 @@
-# Journalism - TUI Bullet Journal
+# Journalist - TUI Bullet Journal
 
 A terminal-based bullet journal application with calendar view, inspired by Ryder Carroll's Bullet Journal system.
 
@@ -70,6 +70,90 @@ Forgot to backup before major refactoring
 ```
 
 The bullet symbols are used only for TUI display - the actual markdown uses headers to organize content by type.
+
+## Data Storage
+
+### File Structure
+
+The journal uses a structured directory layout separating data from indexes:
+
+```
+$JOURNAL_DIR/                    # Default: ~/.local/share/journalist
+├── data/                        # Entry storage
+│   ├── 2024/
+│   │   ├── 01/
+│   │   │   ├── 01/
+│   │   │   │   └── entry.md
+│   │   │   ├── 02/
+│   │   │   │   └── entry.md
+│   │   │   └── ...
+│   │   └── 12/
+│   └── 2025/
+└── indexes/                     # Generated indexes and metadata
+    ├── reverse_index.json       # (example plugin output)
+    ├── embeddings/              # (example plugin output)
+    └── tags/                    # (example plugin output)
+```
+
+### Configuration
+
+- **Default Location**: `~/.local/share/journalist/` (follows XDG Base Directory Specification)
+- **Environment Variable**: `JOURNAL_DIR` - override default storage location
+- **Data Directory**: `$JOURNAL_DIR/data/` - contains all entry files
+- **Indexes Directory**: `$JOURNAL_DIR/indexes/` - contains generated indexes and plugin outputs
+- **File Naming**: Each day uses a single `entry.md` file
+- **Sparse Storage**: Days without entries have no corresponding files
+
+### Path Examples
+
+```
+~/.local/share/journalist/data/2024/03/15/entry.md     # March 15, 2024
+~/.local/share/journalist/data/2024/12/31/entry.md     # December 31, 2024
+~/.local/share/journalist/indexes/reverse_index.json  # Generated index
+```
+
+## Plugin System
+
+### Write Hooks
+
+The application supports a plugin system that triggers hooks when entries are written:
+
+#### Hook Interface
+
+```rust
+pub trait WriteHook: Send + Sync {
+    /// Called after an entry has been successfully written to disk
+    fn on_entry_written(&self, context: &WriteContext, entry: &Entry) -> anyhow::Result<()>;
+    
+    /// Human-readable name for this hook
+    fn name(&self) -> &str;
+    
+    /// Whether this hook should be enabled by default
+    fn enabled_by_default(&self) -> bool { true }
+}
+```
+
+#### Write Context
+
+Hooks receive context about the write operation:
+
+```rust
+pub struct WriteContext {
+    pub date: NaiveDate,
+    pub entry_path: PathBuf,      // Path to the written entry file
+    pub indexes_dir: PathBuf,     // Path to indexes directory
+    pub content: String,          // Raw markdown content written
+}
+```
+
+#### Example Plugin Use Cases
+
+- **Reverse Index**: Update search indexes when entries are modified
+- **Vector Embeddings**: Generate embeddings for semantic search
+- **Tag Extraction**: Parse and index hashtags or mentions
+- **Cross-References**: Build links between related entries
+- **Backup**: Sync entries to external storage
+- **Analytics**: Track writing patterns and statistics
 
 ## Development Commands
 
