@@ -47,6 +47,8 @@
             # We use nightly rustfmt features.
             (rust-bin.selectLatestNightlyWith (toolchain: toolchain.rustfmt))
 
+            duckdb
+
             cargo-sort
             bacon
           ];

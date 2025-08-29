@@ -1,4 +1,4 @@
-use crate::domain::{DateRange, Entry};
+use crate::entities::{DateRange, Entry};
 use crate::infrastructure::{EntryRepository, HookRegistry, MarkdownParser, WriteContext};
 use anyhow::Result;
 use chrono::NaiveDate;
@@ -6,16 +6,16 @@ use std::path::PathBuf;
 
 pub struct FileSystemRepository {
     data_dir: PathBuf,
-    indexes_dir: PathBuf,
+    journal_dir: PathBuf,
     parser: MarkdownParser,
     hook_registry: HookRegistry,
 }
 
 impl FileSystemRepository {
-    pub fn new(data_dir: PathBuf, indexes_dir: PathBuf) -> Self {
+    pub fn new(data_dir: PathBuf, journal_dir: PathBuf) -> Self {
         Self {
             data_dir,
-            indexes_dir,
+            journal_dir,
             parser: MarkdownParser::new(),
             hook_registry: HookRegistry::new(),
         }
@@ -23,12 +23,12 @@ impl FileSystemRepository {
 
     pub fn with_hooks(
         data_dir: PathBuf,
-        indexes_dir: PathBuf,
+        journal_dir: PathBuf,
         hook_registry: HookRegistry,
     ) -> Self {
         Self {
             data_dir,
-            indexes_dir,
+            journal_dir,
             parser: MarkdownParser::new(),
             hook_registry,
         }
@@ -64,8 +64,8 @@ impl EntryRepository for FileSystemRepository {
             std::fs::create_dir_all(parent)?;
         }
 
-        // Ensure indexes directory exists
-        std::fs::create_dir_all(&self.indexes_dir)?;
+        // Ensure journal directory exists
+        std::fs::create_dir_all(&self.journal_dir)?;
 
         let content = self.parser.serialize(&entry)?;
         std::fs::write(&path, &content)?;
@@ -74,7 +74,7 @@ impl EntryRepository for FileSystemRepository {
         let context = WriteContext {
             date: entry.date,
             entry_path: path,
-            indexes_dir: self.indexes_dir.clone(),
+            journal_dir: self.journal_dir.clone(),
             content,
         };
 

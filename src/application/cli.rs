@@ -1,4 +1,4 @@
-use crate::application::JournalApp;
+use crate::application::{JournalApp, WeekView, WeekViewResult, test_terminal_setup};
 use chrono::{Local, NaiveDate};
 use clap::{Parser, Subcommand};
 
@@ -21,6 +21,14 @@ pub enum Commands {
     },
     /// Start the interactive TUI
     Tui,
+    /// Start the week view TUI
+    Week {
+        /// Specific date to focus on (YYYY-MM-DD format, defaults to today)
+        #[arg(short, long)]
+        date: Option<String>,
+    },
+    /// Test terminal capabilities
+    TestTerminal,
 }
 
 impl Cli {
@@ -41,9 +49,39 @@ impl Cli {
             Some(Commands::Tui) => {
                 app.run_tui()?;
             }
+            Some(Commands::TestTerminal) => {
+                test_terminal_setup()?;
+            }
+            Some(Commands::Week { date }) => {
+                let target_date = if let Some(date_str) = date {
+                    NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")?
+                } else {
+                    Local::now().naive_local().date()
+                };
+
+                let mut week_view = WeekView::new(target_date)?;
+                match week_view.run()? {
+                    WeekViewResult::EditRequested(selected_date) => {
+                        app.edit_entry_for_date(selected_date)?;
+                    }
+                    WeekViewResult::Exited(_) => {
+                        // User exited without selecting, do nothing
+                    }
+                }
+            }
             None => {
-                // Default: start TUI
-                app.run_tui()?;
+                // Default: start week view
+                let target_date = Local::now().naive_local().date();
+                
+                let mut week_view = WeekView::new(target_date)?;
+                match week_view.run()? {
+                    WeekViewResult::EditRequested(selected_date) => {
+                        app.edit_entry_for_date(selected_date)?;
+                    }
+                    WeekViewResult::Exited(_) => {
+                        // User exited without selecting, do nothing
+                    }
+                }
             }
         }
 

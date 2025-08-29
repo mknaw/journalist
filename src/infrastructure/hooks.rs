@@ -1,4 +1,4 @@
-use crate::domain::Entry;
+use crate::entities::Entry;
 use anyhow::Result;
 use chrono::NaiveDate;
 use std::path::PathBuf;
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 pub struct WriteContext {
     pub date: NaiveDate,
     pub entry_path: PathBuf,
-    pub indexes_dir: PathBuf,
+    pub journal_dir: PathBuf,
     pub content: String,
 }
 

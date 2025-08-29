@@ -1,5 +1,5 @@
 use crate::application::Config;
-use crate::domain::{DateRange, Journal, ViewScope};
+use crate::entities::{DateRange, Journal, ViewScope};
 use crate::infrastructure::{FileSystemRepository, HookRegistry, SimpleLoggerHook};
 use chrono::{Datelike, Local, NaiveDate};
 
@@ -24,7 +24,7 @@ impl JournalApp {
 
         let repository = FileSystemRepository::with_hooks(
             config.data_dir.clone(),
-            config.indexes_dir.clone(),
+            config.journal_dir.clone(),
             hook_registry,
         );
         let journal = Journal::new(Box::new(repository));
@@ -42,7 +42,7 @@ impl JournalApp {
     pub fn without_plugins() -> Self {
         let config = Config::from_env();
         let repository =
-            FileSystemRepository::new(config.data_dir.clone(), config.indexes_dir.clone());
+            FileSystemRepository::new(config.data_dir.clone(), config.journal_dir.clone());
         let journal = Journal::new(Box::new(repository));
         let current_date = Local::now().naive_local().date();
         let current_view = ViewScope::Day(current_date);

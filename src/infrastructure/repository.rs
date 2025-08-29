@@ -1,4 +1,4 @@
-use crate::domain::{DateRange, Entry};
+use crate::entities::{DateRange, Entry};
 use anyhow::Result;
 use chrono::NaiveDate;
 

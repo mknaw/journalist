@@ -1,4 +1,4 @@
-use crate::domain::{Entry, Event, Note, Task, TaskState};
+use crate::entities::{Entry, Event, Note, Task, TaskState};
 use anyhow::Result;
 use chrono::NaiveDate;
 

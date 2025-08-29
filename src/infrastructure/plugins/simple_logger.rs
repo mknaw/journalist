@@ -1,4 +1,4 @@
-use crate::domain::Entry;
+use crate::entities::Entry;
 use crate::infrastructure::{WriteContext, WriteHook};
 use anyhow::Result;
 use std::fs::OpenOptions;
@@ -9,7 +9,7 @@ pub struct SimpleLoggerHook;
 
 impl WriteHook for SimpleLoggerHook {
     fn on_entry_written(&self, context: &WriteContext, entry: &Entry) -> Result<()> {
-        let log_path = context.indexes_dir.join("write_log.txt");
+        let log_path = context.journal_dir.join("write_log.txt");
 
         let mut file = OpenOptions::new()
             .create(true)

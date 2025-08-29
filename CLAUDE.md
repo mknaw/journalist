@@ -73,13 +73,13 @@ The bullet symbols are used only for TUI display - the actual markdown uses head
 
 ## Data Storage
 
-### File Structure
+### Hybrid Architecture
 
-The journal uses a structured directory layout separating data from indexes:
+The journal uses a hybrid storage approach combining file-based entries with DuckDB for indexing and querying:
 
 ```
 $JOURNAL_DIR/                    # Default: ~/.local/share/journalist
-├── data/                        # Entry storage
+├── data/                        # Markdown entry storage
 │   ├── 2024/
 │   │   ├── 01/
 │   │   │   ├── 01/
@@ -89,27 +89,34 @@ $JOURNAL_DIR/                    # Default: ~/.local/share/journalist
 │   │   │   └── ...
 │   │   └── 12/
 │   └── 2025/
-└── indexes/                     # Generated indexes and metadata
-    ├── reverse_index.json       # (example plugin output)
-    ├── embeddings/              # (example plugin output)
-    └── tags/                    # (example plugin output)
+└── journal.db                   # DuckDB database for indexing and queries
 ```
+
+### Storage Components
+
+- **Markdown Files**: Primary storage for human-readable entries in `$JOURNAL_DIR/data/`
+- **DuckDB Database**: Required component at `$JOURNAL_DIR/journal.db` for:
+  - Full-text search across entries
+  - Analytics and writing statistics
+  - Cross-references between entries
+  - Term frequency analysis
+  - Bullet type aggregation and filtering
 
 ### Configuration
 
 - **Default Location**: `~/.local/share/journalist/` (follows XDG Base Directory Specification)
 - **Environment Variable**: `JOURNAL_DIR` - override default storage location
-- **Data Directory**: `$JOURNAL_DIR/data/` - contains all entry files
-- **Indexes Directory**: `$JOURNAL_DIR/indexes/` - contains generated indexes and plugin outputs
+- **Data Directory**: `$JOURNAL_DIR/data/` - contains all entry markdown files
+- **Database File**: `$JOURNAL_DIR/journal.db` - DuckDB database with indexes and metadata
 - **File Naming**: Each day uses a single `entry.md` file
-- **Sparse Storage**: Days without entries have no corresponding files
+- **Sparse Storage**: Days without entries have no corresponding files or database records
 
 ### Path Examples
 
 ```
-~/.local/share/journalist/data/2024/03/15/entry.md     # March 15, 2024
-~/.local/share/journalist/data/2024/12/31/entry.md     # December 31, 2024
-~/.local/share/journalist/indexes/reverse_index.json  # Generated index
+~/.local/share/journalist/data/2024/03/15/entry.md     # March 15, 2024 markdown
+~/.local/share/journalist/data/2024/12/31/entry.md     # December 31, 2024 markdown
+~/.local/share/journalist/journal.db                   # DuckDB database
 ```
 
 ## Plugin System
@@ -141,19 +148,26 @@ Hooks receive context about the write operation:
 pub struct WriteContext {
     pub date: NaiveDate,
     pub entry_path: PathBuf,      // Path to the written entry file
-    pub indexes_dir: PathBuf,     // Path to indexes directory
+    pub journal_dir: PathBuf,     // Path to journal directory (contains journal.db)
     pub content: String,          // Raw markdown content written
 }
 ```
 
+#### Default Plugin: DuckDB Sync
+
+The **DuckDB Sync** plugin is automatically loaded and cannot be disabled. It:
+- Upserts entry data into the DuckDB database when files are written
+- Updates search indexes for full-text search
+- Refreshes metadata and statistics
+- Maintains data consistency between markdown files and database
+
 #### Example Plugin Use Cases
 
-- **Reverse Index**: Update search indexes when entries are modified
 - **Vector Embeddings**: Generate embeddings for semantic search
-- **Tag Extraction**: Parse and index hashtags or mentions
+- **Tag Extraction**: Parse and index hashtags or mentions  
 - **Cross-References**: Build links between related entries
 - **Backup**: Sync entries to external storage
-- **Analytics**: Track writing patterns and statistics
+- **Analytics**: Extended writing pattern analysis beyond built-in stats
 
 ## Development Commands
 
