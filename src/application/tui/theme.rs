@@ -123,7 +123,7 @@ impl Theme {
                 accent: ColorPair::new(CrosstermColor::Blue),
                 
                 selected: ColorPair::new(CrosstermColor::Blue),
-                today: ColorPair::with_bg(CrosstermColor::Black, CrosstermColor::Yellow),
+                today: ColorPair::new(CrosstermColor::Yellow),
                 focused: ColorPair::new(CrosstermColor::White),
                 focused_week_bg: ColorPair::with_bg(CrosstermColor::White, CrosstermColor::Rgb { r: 28, g: 28, b: 28 }),
                 dimmed: ColorPair::new(CrosstermColor::DarkGrey),

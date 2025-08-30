@@ -1,4 +1,5 @@
 use super::theme::Theme;
+use crate::entities::Journal;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, poll};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
@@ -22,7 +23,7 @@ pub enum WeekViewResult {
     EditRequested(NaiveDate),
 }
 
-pub struct WeekView {
+pub struct WeekView<'a> {
     /// Current week being focused (middle row)
     current_week_start: NaiveDate,
     /// Currently selected date
@@ -37,10 +38,12 @@ pub struct WeekView {
     show_help: bool,
     /// Theme for styling
     theme: Theme,
+    /// Journal reference for checking entries
+    journal: &'a mut Journal,
 }
 
-impl WeekView {
-    pub fn new(initial_date: NaiveDate) -> io::Result<Self> {
+impl<'a> WeekView<'a> {
+    pub fn new(initial_date: NaiveDate, journal: &'a mut Journal) -> io::Result<Self> {
         // First check if we're in a proper terminal
         if !IsTty::is_tty(&std::io::stdout()) {
             return Err(io::Error::new(
@@ -76,6 +79,7 @@ impl WeekView {
             should_edit: false,
             show_help: false,
             theme: Theme::default(),
+            journal,
         })
     }
     
@@ -98,11 +102,24 @@ impl WeekView {
         (0..7).map(|i| week_start + Duration::days(i)).collect()
     }
     
-    /// Mock function to check if a date has an entry (randomly half will have entries)
-    fn has_entry(date: NaiveDate) -> bool {
-        // Use date as seed for consistent "random" results
-        let seed = (date.year() as u32 * 10000 + date.month() * 100 + date.day()) % 2;
-        seed == 0
+    /// Check if a date has an entry in the journal
+    fn has_entry(&mut self, date: NaiveDate) -> bool {
+        self.journal.get_entry(date).unwrap_or(None).is_some()
+    }
+    
+    /// Get entry status for all dates in the given range
+    fn get_entry_statuses(&mut self, weeks: &[NaiveDate]) -> std::collections::HashMap<NaiveDate, bool> {
+        let mut statuses = std::collections::HashMap::new();
+        
+        for &week_start in weeks {
+            let dates = Self::get_week_dates(week_start);
+            for date in dates {
+                let has_entry = self.journal.get_entry(date).unwrap_or(None).is_some();
+                statuses.insert(date, has_entry);
+            }
+        }
+        
+        statuses
     }
     
     /// Calculate centered area with both horizontal and vertical centering
@@ -157,13 +174,19 @@ impl WeekView {
     }
     
     /// Create a table row for a week (static version)
-    fn create_week_row_static(week_start: NaiveDate, is_focused: bool, selected_date: NaiveDate, theme: &Theme) -> Row<'static> {
+    fn create_week_row_static(
+        week_start: NaiveDate, 
+        is_focused: bool, 
+        selected_date: NaiveDate, 
+        theme: &Theme, 
+        entry_statuses: &std::collections::HashMap<NaiveDate, bool>
+    ) -> Row<'static> {
         let dates = Self::get_week_dates(week_start);
         let cells: Vec<Cell> = dates
             .iter()
             .map(|&date| {
                 let day = date.day();
-                let has_entry = Self::has_entry(date);
+                let has_entry = *entry_statuses.get(&date).unwrap_or(&false);
                 let _is_today = date == chrono::Local::now().date_naive();
                 
                 // Get base style (row style will handle background)
@@ -187,7 +210,7 @@ impl WeekView {
             })
             .collect();
         
-        let mut row = Row::new(cells).height(3); // More vertical space for centered feel
+        let mut row = Row::new(cells);
         
         // Apply focused week background to the entire row
         if is_focused {
@@ -198,7 +221,12 @@ impl WeekView {
     }
     
     /// Create the week view table (static version for drawing)
-    fn create_week_table_static(current_week_start: NaiveDate, selected_date: NaiveDate, theme: &Theme) -> Table<'static> {
+    fn create_week_table_static(
+        current_week_start: NaiveDate, 
+        selected_date: NaiveDate, 
+        theme: &Theme, 
+        entry_statuses: &std::collections::HashMap<NaiveDate, bool>
+    ) -> Table<'static> {
         let focused_week = current_week_start;
         
         // Generate 5 weeks: 2 before, focused week, 2 after
@@ -221,7 +249,7 @@ impl WeekView {
             .enumerate()
             .map(|(i, &week_start)| {
                 let is_focused = i == 2; // Middle row (index 2) is focused
-                Self::create_week_row_static(week_start, is_focused, selected_date, theme)
+                Self::create_week_row_static(week_start, is_focused, selected_date, theme, entry_statuses)
             })
             .collect();
         
@@ -341,7 +369,15 @@ impl WeekView {
                 break;
             }
             
-            // Capture the state we need for drawing
+            // Generate weeks we need to check for entry statuses
+            let weeks: Vec<NaiveDate> = (-2..=2)
+                .map(|offset| self.current_week_start + Duration::weeks(offset))
+                .collect();
+            
+            // Get entry statuses before drawing (requires mutable access to journal)
+            let entry_statuses = self.get_entry_statuses(&weeks);
+            
+            // Capture the state we need for drawing (after mutable borrow is complete)
             let current_week_start = self.current_week_start;
             let selected_date = self.selected_date;
             let show_help = self.show_help;
@@ -376,7 +412,7 @@ impl WeekView {
                 let centered_area = Self::calculate_centered_area(size, needed_width, total_height);
                 
                 // Create and draw week table
-                let table = Self::create_week_table_static(current_week_start, selected_date, theme);
+                let table = Self::create_week_table_static(current_week_start, selected_date, theme, &entry_statuses);
                 
                 if show_help {
                     // Create vertical layout within the centered area
@@ -442,7 +478,7 @@ impl WeekView {
     }
 }
 
-impl Drop for WeekView {
+impl<'a> Drop for WeekView<'a> {
     fn drop(&mut self) {
         // Fallback cleanup if explicit cleanup wasn't called
         let _ = self.cleanup();

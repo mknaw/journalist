@@ -9,26 +9,32 @@ use std::fmt;
 // Bullet Journal Domain Types
 // ============================================================================
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BulletContent(pub String);
-
-impl BulletContent {
-    pub fn new(content: impl Into<String>) -> Self {
-        Self(content.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
+pub enum BulletType {
+    Task,
+    Event,
+    Note,
+    Priority,
+    Inspiration,
+    Insight,
+    Misstep,
 }
 
-impl fmt::Display for BulletContent {
+impl fmt::Display for BulletType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        match self {
+            BulletType::Task => write!(f, "task"),
+            BulletType::Event => write!(f, "event"),
+            BulletType::Note => write!(f, "note"),
+            BulletType::Priority => write!(f, "priority"),
+            BulletType::Inspiration => write!(f, "inspiration"),
+            BulletType::Insight => write!(f, "insight"),
+            BulletType::Misstep => write!(f, "misstep"),
+        }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Copy)]
 pub enum TaskState {
     Pending,
     Completed,
@@ -36,66 +42,63 @@ pub enum TaskState {
     Scheduled,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Task {
-    pub content: BulletContent,
-    pub state: TaskState,
+impl fmt::Display for TaskState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TaskState::Pending => write!(f, "pending"),
+            TaskState::Completed => write!(f, "completed"),
+            TaskState::Migrated => write!(f, "migrated"),
+            TaskState::Scheduled => write!(f, "scheduled"),
+        }
+    }
 }
 
-impl Task {
-    pub fn new(content: impl Into<String>) -> Self {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Bullet {
+    pub content: String,
+    pub bullet_type: BulletType,
+    pub task_state: Option<TaskState>,
+}
+
+impl Bullet {
+    pub fn new(content: impl Into<String>, bullet_type: BulletType) -> Self {
         Self {
-            content: BulletContent::new(content),
-            state: TaskState::Pending,
+            content: content.into(),
+            bullet_type,
+            task_state: match bullet_type {
+                BulletType::Task | BulletType::Priority => Some(TaskState::Pending),
+                _ => None,
+            },
         }
     }
 
-    pub fn with_state(content: impl Into<String>, state: TaskState) -> Self {
+    pub fn with_task_state(content: impl Into<String>, bullet_type: BulletType, state: TaskState) -> Self {
         Self {
-            content: BulletContent::new(content),
-            state,
+            content: content.into(),
+            bullet_type,
+            task_state: Some(state),
         }
     }
 
     pub fn complete(mut self) -> Self {
-        self.state = TaskState::Completed;
+        if matches!(self.bullet_type, BulletType::Task | BulletType::Priority) {
+            self.task_state = Some(TaskState::Completed);
+        }
         self
     }
 
     pub fn migrate(mut self) -> Self {
-        self.state = TaskState::Migrated;
+        if matches!(self.bullet_type, BulletType::Task | BulletType::Priority) {
+            self.task_state = Some(TaskState::Migrated);
+        }
         self
     }
 
     pub fn schedule(mut self) -> Self {
-        self.state = TaskState::Scheduled;
+        if matches!(self.bullet_type, BulletType::Task | BulletType::Priority) {
+            self.task_state = Some(TaskState::Scheduled);
+        }
         self
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Event {
-    pub content: BulletContent,
-}
-
-impl Event {
-    pub fn new(content: impl Into<String>) -> Self {
-        Self {
-            content: BulletContent::new(content),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Note {
-    pub content: BulletContent,
-}
-
-impl Note {
-    pub fn new(content: impl Into<String>) -> Self {
-        Self {
-            content: BulletContent::new(content),
-        }
     }
 }
 
@@ -106,72 +109,47 @@ impl Note {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Entry {
     pub date: NaiveDate,
-    pub tasks: Vec<Task>,
-    pub events: Vec<Event>,
-    pub notes: Vec<Note>,
-    pub priorities: Vec<Task>,
-    pub inspirations: Vec<Note>,
-    pub insights: Vec<Note>,
-    pub missteps: Vec<Note>,
+    pub bullets: HashMap<BulletType, Vec<Bullet>>,
 }
 
 impl Entry {
     pub fn new(date: NaiveDate) -> Self {
         Self {
             date,
-            tasks: Vec::new(),
-            events: Vec::new(),
-            notes: Vec::new(),
-            priorities: Vec::new(),
-            inspirations: Vec::new(),
-            insights: Vec::new(),
-            missteps: Vec::new(),
+            bullets: HashMap::new(),
         }
     }
 
-    pub fn add_task(&mut self, task: Task) -> &mut Self {
-        self.tasks.push(task);
+    pub fn add_bullet(&mut self, bullet: Bullet) -> &mut Self {
+        self.bullets
+            .entry(bullet.bullet_type.clone())
+            .or_insert_with(Vec::new)
+            .push(bullet);
         self
     }
 
-    pub fn add_event(&mut self, event: Event) -> &mut Self {
-        self.events.push(event);
-        self
+    pub fn get_bullets(&self, bullet_type: &BulletType) -> &[Bullet] {
+        self.bullets.get(bullet_type).map_or(&[], |bullets| bullets.as_slice())
     }
 
-    pub fn add_note(&mut self, note: Note) -> &mut Self {
-        self.notes.push(note);
-        self
+    pub fn get_bullets_mut(&mut self, bullet_type: &BulletType) -> &mut Vec<Bullet> {
+        self.bullets.entry(bullet_type.clone()).or_insert_with(Vec::new)
     }
 
-    pub fn add_priority(&mut self, task: Task) -> &mut Self {
-        self.priorities.push(task);
-        self
-    }
-
-    pub fn add_inspiration(&mut self, note: Note) -> &mut Self {
-        self.inspirations.push(note);
-        self
-    }
-
-    pub fn add_insight(&mut self, note: Note) -> &mut Self {
-        self.insights.push(note);
-        self
-    }
-
-    pub fn add_misstep(&mut self, note: Note) -> &mut Self {
-        self.missteps.push(note);
-        self
+    pub fn all_bullets(&self) -> impl Iterator<Item = &Bullet> {
+        self.bullets.values().flatten()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.tasks.is_empty()
-            && self.events.is_empty()
-            && self.notes.is_empty()
-            && self.priorities.is_empty()
-            && self.inspirations.is_empty()
-            && self.insights.is_empty()
-            && self.missteps.is_empty()
+        self.bullets.values().all(|bullets| bullets.is_empty())
+    }
+
+    pub fn bullet_count(&self, bullet_type: &BulletType) -> usize {
+        self.bullets.get(bullet_type).map_or(0, |bullets| bullets.len())
+    }
+
+    pub fn total_bullets(&self) -> usize {
+        self.bullets.values().map(|bullets| bullets.len()).sum()
     }
 }
 
@@ -253,8 +231,8 @@ impl DateRange {
 // ============================================================================
 
 pub struct Journal {
-    entries: HashMap<NaiveDate, Entry>,
-    repository: Box<dyn EntryRepository>,
+    pub entries: HashMap<NaiveDate, Entry>,
+    pub repository: Box<dyn EntryRepository>,
 }
 
 impl Journal {

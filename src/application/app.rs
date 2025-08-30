@@ -4,7 +4,7 @@ use crate::infrastructure::{FileSystemRepository, HookRegistry, SimpleLoggerHook
 use chrono::{Datelike, Local, NaiveDate};
 
 pub struct JournalApp {
-    journal: Journal,
+    pub journal: Journal,
     config: Config,
     current_date: NaiveDate,
     current_view: ViewScope,
@@ -65,7 +65,7 @@ impl JournalApp {
             println!(
                 "Entry for {}: {} items",
                 entry.date,
-                entry.tasks.len() + entry.events.len() + entry.notes.len()
+                entry.total_bullets()
             );
         } else {
             println!("No entry for {} yet", self.current_date);
@@ -128,7 +128,11 @@ impl JournalApp {
             return Err(anyhow::anyhow!("Editor exited with error: {}", status));
         }
 
-        // TODO: Reload entry from file after editing
+        // Reload entry from file after editing to reflect changes
+        if let Ok(Some(updated_entry)) = self.journal.repository.load(date) {
+            self.journal.entries.insert(date, updated_entry);
+        }
+        
         println!("Entry saved for {}", date);
 
         Ok(())

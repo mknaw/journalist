@@ -1,4 +1,4 @@
-use crate::entities::{Entry, Event, Note, Task, TaskState};
+use crate::entities::{Entry, Bullet, BulletType, TaskState};
 use anyhow::Result;
 use chrono::NaiveDate;
 
@@ -11,77 +11,60 @@ impl MarkdownParser {
 
     pub fn parse(&self, date: NaiveDate, content: &str) -> Result<Entry> {
         let mut entry = Entry::new(date);
+        let mut current_bullet_type: Option<BulletType> = None;
 
-        // TODO: Implement markdown parsing
-        // Parse sections like:
-        // # Tasks
-        // Complete project proposal
-        // Review code changes
-        //
-        // # Events
-        // Team meeting at 2pm
-        // etc.
+        for line in content.lines() {
+            let line = line.trim();
+            
+            if line.is_empty() {
+                continue;
+            }
 
-        todo!("Implement markdown parsing")
+            if line.starts_with('#') {
+                current_bullet_type = match line.to_lowercase().as_str() {
+                    "# tasks" => Some(BulletType::Task),
+                    "# events" => Some(BulletType::Event),
+                    "# notes" => Some(BulletType::Note),
+                    "# priority" => Some(BulletType::Priority),
+                    "# inspiration" => Some(BulletType::Inspiration),
+                    "# insights" => Some(BulletType::Insight),
+                    "# missteps" => Some(BulletType::Misstep),
+                    _ => None,
+                };
+                continue;
+            }
+
+            if let Some(bullet_type) = current_bullet_type {
+                let bullet = Bullet::new(line, bullet_type);
+                entry.add_bullet(bullet);
+            }
+        }
+
+        Ok(entry)
     }
 
     pub fn serialize(&self, entry: &Entry) -> Result<String> {
         let mut content = String::new();
 
-        if !entry.tasks.is_empty() {
-            content.push_str("# Tasks\n");
-            for task in &entry.tasks {
-                content.push_str(&format!("{}\n", task.content.as_str()));
-            }
-            content.push('\n');
-        }
+        let sections = [
+            (BulletType::Task, "# Tasks"),
+            (BulletType::Event, "# Events"),
+            (BulletType::Note, "# Notes"),
+            (BulletType::Priority, "# Priority"),
+            (BulletType::Inspiration, "# Inspiration"),
+            (BulletType::Insight, "# Insights"),
+            (BulletType::Misstep, "# Missteps"),
+        ];
 
-        if !entry.events.is_empty() {
-            content.push_str("# Events\n");
-            for event in &entry.events {
-                content.push_str(&format!("{}\n", event.content.as_str()));
+        for (bullet_type, section_header) in sections {
+            let bullets = entry.get_bullets(&bullet_type);
+            if !bullets.is_empty() {
+                content.push_str(&format!("{}\n", section_header));
+                for bullet in bullets {
+                    content.push_str(&format!("{}\n", bullet.content));
+                }
+                content.push('\n');
             }
-            content.push('\n');
-        }
-
-        if !entry.notes.is_empty() {
-            content.push_str("# Notes\n");
-            for note in &entry.notes {
-                content.push_str(&format!("{}\n", note.content.as_str()));
-            }
-            content.push('\n');
-        }
-
-        if !entry.priorities.is_empty() {
-            content.push_str("# Priority\n");
-            for task in &entry.priorities {
-                content.push_str(&format!("{}\n", task.content.as_str()));
-            }
-            content.push('\n');
-        }
-
-        if !entry.inspirations.is_empty() {
-            content.push_str("# Inspiration\n");
-            for note in &entry.inspirations {
-                content.push_str(&format!("{}\n", note.content.as_str()));
-            }
-            content.push('\n');
-        }
-
-        if !entry.insights.is_empty() {
-            content.push_str("# Insights\n");
-            for note in &entry.insights {
-                content.push_str(&format!("{}\n", note.content.as_str()));
-            }
-            content.push('\n');
-        }
-
-        if !entry.missteps.is_empty() {
-            content.push_str("# Missteps\n");
-            for note in &entry.missteps {
-                content.push_str(&format!("{}\n", note.content.as_str()));
-            }
-            content.push('\n');
         }
 
         Ok(content)

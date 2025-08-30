@@ -1,5 +1,5 @@
 use crate::entities::{DateRange, Entry};
-use crate::infrastructure::{EntryRepository, HookRegistry, MarkdownParser, WriteContext};
+use crate::infrastructure::{EntryRepository, HookRegistry, WriteContext, MarkdownParser};
 use anyhow::Result;
 use chrono::NaiveDate;
 use std::path::PathBuf;

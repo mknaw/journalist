@@ -27,8 +27,6 @@ pub enum Commands {
         #[arg(short, long)]
         date: Option<String>,
     },
-    /// Test terminal capabilities
-    TestTerminal,
 }
 
 impl Cli {
@@ -49,9 +47,6 @@ impl Cli {
             Some(Commands::Tui) => {
                 app.run_tui()?;
             }
-            Some(Commands::TestTerminal) => {
-                test_terminal_setup()?;
-            }
             Some(Commands::Week { date }) => {
                 let target_date = if let Some(date_str) = date {
                     NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")?
@@ -59,13 +54,21 @@ impl Cli {
                     Local::now().naive_local().date()
                 };
 
-                let mut week_view = WeekView::new(target_date)?;
-                match week_view.run()? {
-                    WeekViewResult::EditRequested(selected_date) => {
-                        app.edit_entry_for_date(selected_date)?;
-                    }
-                    WeekViewResult::Exited(_) => {
-                        // User exited without selecting, do nothing
+                loop {
+                    let result = {
+                        let mut week_view = WeekView::new(target_date, &mut app.journal)?;
+                        week_view.run()?
+                    }; // week_view is dropped here, releasing the borrow
+                    
+                    match result {
+                        WeekViewResult::EditRequested(selected_date) => {
+                            app.edit_entry_for_date(selected_date)?;
+                            // Continue loop to return to WeekView
+                        }
+                        WeekViewResult::Exited(_) => {
+                            // User exited, break the loop
+                            break;
+                        }
                     }
                 }
             }
@@ -73,13 +76,21 @@ impl Cli {
                 // Default: start week view
                 let target_date = Local::now().naive_local().date();
                 
-                let mut week_view = WeekView::new(target_date)?;
-                match week_view.run()? {
-                    WeekViewResult::EditRequested(selected_date) => {
-                        app.edit_entry_for_date(selected_date)?;
-                    }
-                    WeekViewResult::Exited(_) => {
-                        // User exited without selecting, do nothing
+                loop {
+                    let result = {
+                        let mut week_view = WeekView::new(target_date, &mut app.journal)?;
+                        week_view.run()?
+                    }; // week_view is dropped here, releasing the borrow
+                    
+                    match result {
+                        WeekViewResult::EditRequested(selected_date) => {
+                            app.edit_entry_for_date(selected_date)?;
+                            // Continue loop to return to WeekView
+                        }
+                        WeekViewResult::Exited(_) => {
+                            // User exited, break the loop
+                            break;
+                        }
                     }
                 }
             }

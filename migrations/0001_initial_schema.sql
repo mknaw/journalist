@@ -1,26 +1,23 @@
 -- Initial schema for journalist database
--- Create entries table
-CREATE TABLE IF NOT EXISTS entries (
-    date DATE PRIMARY KEY,
+-- Create bullets table
+CREATE TABLE IF NOT EXISTS bullets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL,
     content TEXT NOT NULL,
-    word_count INTEGER NOT NULL DEFAULT 0,
-    task_count INTEGER NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0,
-    note_count INTEGER NOT NULL DEFAULT 0,
-    priority_count INTEGER NOT NULL DEFAULT 0,
-    inspiration_count INTEGER NOT NULL DEFAULT 0,
-    insight_count INTEGER NOT NULL DEFAULT 0,
-    misstep_count INTEGER NOT NULL DEFAULT 0,
+    type TEXT NOT NULL, -- task, event, note, priority, inspiration, insight, misstep
+    task_state TEXT, -- pending, completed, migrated, scheduled (only for task types)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create full-text search index
-CREATE TABLE IF NOT EXISTS entry_search (
-    date DATE,
-    content_fts TEXT,
-    FOREIGN KEY (date) REFERENCES entries(date) ON DELETE CASCADE
-);
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_bullets_date ON bullets(date);
+CREATE INDEX IF NOT EXISTS idx_bullets_type ON bullets(type);
+CREATE INDEX IF NOT EXISTS idx_bullets_date_type ON bullets(date, type);
+CREATE INDEX IF NOT EXISTS idx_bullets_updated ON bullets(updated_at);
+
+-- Create full-text search index directly on the content column
+CREATE INDEX IF NOT EXISTS idx_bullets_content_fts ON bullets USING FTS(content);
 
 -- Create metadata tables
 CREATE TABLE IF NOT EXISTS term_frequency (
@@ -34,13 +31,9 @@ CREATE TABLE IF NOT EXISTS cross_references (
     source_date DATE,
     target_date DATE,
     reference_type TEXT,
-    PRIMARY KEY (source_date, target_date, reference_type),
-    FOREIGN KEY (source_date) REFERENCES entries(date) ON DELETE CASCADE,
-    FOREIGN KEY (target_date) REFERENCES entries(date) ON DELETE CASCADE
+    PRIMARY KEY (source_date, target_date, reference_type)
 );
 
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
-CREATE INDEX IF NOT EXISTS idx_entries_updated ON entries(updated_at);
+-- Create indexes for metadata tables
 CREATE INDEX IF NOT EXISTS idx_term_frequency_term ON term_frequency(term);
 CREATE INDEX IF NOT EXISTS idx_term_frequency_last_seen ON term_frequency(last_seen);

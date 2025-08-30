@@ -1,4 +1,4 @@
-use crate::entities::{Entry, Event, Note, Task, TaskState};
+use crate::entities::{Entry, Bullet, BulletType, TaskState};
 
 pub struct TuiRenderer;
 
@@ -10,58 +10,34 @@ impl TuiRenderer {
     pub fn render_entry(&self, entry: &Entry) {
         println!("=== {} ===", entry.date);
 
-        if !entry.tasks.is_empty() {
-            println!("\n• TASKS");
-            for task in &entry.tasks {
-                let symbol = match task.state {
-                    TaskState::Pending => "•",
-                    TaskState::Completed => "X",
-                    TaskState::Migrated => ">",
-                    TaskState::Scheduled => "<",
-                };
-                println!("  {} {}", symbol, task.content.as_str());
-            }
-        }
+        let sections = [
+            (BulletType::Task, "• TASKS", "•"),
+            (BulletType::Event, "○ EVENTS", "○"),
+            (BulletType::Note, "— NOTES", "—"),
+            (BulletType::Priority, "★ PRIORITY", "★"),
+            (BulletType::Inspiration, "! INSPIRATION", "!"),
+            (BulletType::Insight, "$ INSIGHTS", "$"),
+            (BulletType::Misstep, "v MISSTEPS", "v"),
+        ];
 
-        if !entry.events.is_empty() {
-            println!("\n○ EVENTS");
-            for event in &entry.events {
-                println!("  ○ {}", event.content.as_str());
-            }
-        }
-
-        if !entry.notes.is_empty() {
-            println!("\n— NOTES");
-            for note in &entry.notes {
-                println!("  — {}", note.content.as_str());
-            }
-        }
-
-        if !entry.priorities.is_empty() {
-            println!("\n★ PRIORITY");
-            for task in &entry.priorities {
-                println!("  ★ {}", task.content.as_str());
-            }
-        }
-
-        if !entry.inspirations.is_empty() {
-            println!("\n! INSPIRATION");
-            for note in &entry.inspirations {
-                println!("  ! {}", note.content.as_str());
-            }
-        }
-
-        if !entry.insights.is_empty() {
-            println!("\n$ INSIGHTS");
-            for note in &entry.insights {
-                println!("  $ {}", note.content.as_str());
-            }
-        }
-
-        if !entry.missteps.is_empty() {
-            println!("\nv MISSTEPS");
-            for note in &entry.missteps {
-                println!("  v {}", note.content.as_str());
+        for (bullet_type, section_name, default_symbol) in sections {
+            let bullets = entry.get_bullets(&bullet_type);
+            if !bullets.is_empty() {
+                println!("\n{}", section_name);
+                for bullet in bullets {
+                    let symbol = if matches!(bullet_type, BulletType::Task | BulletType::Priority) {
+                        match bullet.task_state {
+                            Some(TaskState::Pending) => "•",
+                            Some(TaskState::Completed) => "X",
+                            Some(TaskState::Migrated) => ">",
+                            Some(TaskState::Scheduled) => "<",
+                            None => default_symbol,
+                        }
+                    } else {
+                        default_symbol
+                    };
+                    println!("  {} {}", symbol, bullet.content);
+                }
             }
         }
     }
