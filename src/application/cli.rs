@@ -1,4 +1,4 @@
-use crate::application::{JournalApp, WeekView, WeekViewResult, test_terminal_setup};
+use crate::application::{JournalApp, WeekView, WeekViewResult};
 use chrono::{Local, NaiveDate};
 use clap::{Parser, Subcommand};
 

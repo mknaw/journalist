@@ -9,8 +9,8 @@ This is a Rust project using ratatui for the terminal interface.
 ### Core Components
 
 - **TUI Calendar View**: Navigate between days/weeks/months
-- **Entry Structure**: Markdown files following bullet journal format
-- **External Editor**: Opens `$EDITOR` for editing entries (like `git commit -e`)
+- **Entry Structure**: Markdown format for bullet journal entries (stored in DuckDB)
+- **External Editor**: Opens `$EDITOR` for editing entries via temp files (like `git commit -e`)
 
 ### Bullet Journal Structure
 
@@ -73,51 +73,47 @@ The bullet symbols are used only for TUI display - the actual markdown uses head
 
 ## Data Storage
 
-### Hybrid Architecture
+### DuckDB-Only Architecture
 
-The journal uses a hybrid storage approach combining file-based entries with DuckDB for indexing and querying:
+The journal uses a single DuckDB database file for all storage, eliminating filesystem complexity:
 
 ```
 $JOURNAL_DIR/                    # Default: ~/.local/share/journalist
-├── data/                        # Markdown entry storage
-│   ├── 2024/
-│   │   ├── 01/
-│   │   │   ├── 01/
-│   │   │   │   └── entry.md
-│   │   │   ├── 02/
-│   │   │   │   └── entry.md
-│   │   │   └── ...
-│   │   └── 12/
-│   └── 2025/
-└── journal.db                   # DuckDB database for indexing and queries
+└── journal.db                   # Single DuckDB database file
 ```
 
-### Storage Components
+### Storage Benefits
 
-- **Markdown Files**: Primary storage for human-readable entries in `$JOURNAL_DIR/data/`
-- **DuckDB Database**: Required component at `$JOURNAL_DIR/journal.db` for:
-  - Full-text search across entries
-  - Analytics and writing statistics
-  - Cross-references between entries
-  - Term frequency analysis
-  - Bullet type aggregation and filtering
+- **Single Source of Truth**: All data stored in one DuckDB file
+- **Easy Syncing**: Single file sync with tools like syncthing between hosts
+- **Full-Text Search**: Native DuckDB search capabilities across all entries
+- **Analytics**: Built-in aggregation and statistical analysis
+- **No File Conflicts**: Eliminates directory structure sync issues
+- **Atomic Operations**: Database transactions ensure data consistency
+
+### Editor Integration
+
+When editing entries:
+1. **Existing Entry**: Query DuckDB → format to markdown → write to temp file → launch editor
+2. **New Entry**: Create markdown template → write to temp file → launch editor  
+3. **Save Process**: Parse edited content → save directly to DuckDB → delete temp file
 
 ### Configuration
 
 - **Default Location**: `~/.local/share/journalist/` (follows XDG Base Directory Specification)
 - **Environment Variable**: `JOURNAL_DIR` - override default storage location
-- **Data Directory**: `$JOURNAL_DIR/data/` - contains all entry markdown files
-- **Database File**: `$JOURNAL_DIR/journal.db` - DuckDB database with indexes and metadata
-- **File Naming**: Each day uses a single `entry.md` file
-- **Sparse Storage**: Days without entries have no corresponding files or database records
+- **Database File**: `$JOURNAL_DIR/journal.db` - Single DuckDB database file
+- **Temp Files**: Created on-demand with `.md` extension for editor syntax highlighting
+- **Migration Support**: Automatic schema migrations for database upgrades
 
-### Path Examples
+### Storage Features
 
-```
-~/.local/share/journalist/data/2024/03/15/entry.md     # March 15, 2024 markdown
-~/.local/share/journalist/data/2024/12/31/entry.md     # December 31, 2024 markdown
-~/.local/share/journalist/journal.db                   # DuckDB database
-```
+- Full-text search across entries
+- Writing statistics and analytics
+- Cross-references between entries
+- Term frequency analysis
+- Bullet type aggregation and filtering
+- Sparse storage (no records for empty days)
 
 ## Plugin System
 
@@ -153,13 +149,13 @@ pub struct WriteContext {
 }
 ```
 
-#### Default Plugin: DuckDB Sync
+#### Database Integration
 
-The **DuckDB Sync** plugin is automatically loaded and cannot be disabled. It:
-- Upserts entry data into the DuckDB database when files are written
-- Updates search indexes for full-text search
-- Refreshes metadata and statistics
-- Maintains data consistency between markdown files and database
+Since all data is stored directly in DuckDB, there's no separate sync plugin needed. Entry saves automatically:
+- Update the DuckDB database directly
+- Refresh search indexes for full-text search
+- Update metadata and statistics
+- Maintain transactional consistency
 
 #### Example Plugin Use Cases
 
@@ -190,6 +186,7 @@ cargo fmt
 
 - Calendar navigation (day/week/month views)
 - Week-level aggregation (concatenates structured entries from each day)
-- External editor integration via `$EDITOR`
-- Markdown-based entry storage
+- External editor integration via `$EDITOR` with temp files
+- DuckDB-based storage for reliability and sync simplicity
+- Full-text search and analytics
 - Bullet journal rapid logging system

@@ -100,6 +100,31 @@ impl Bullet {
         }
         self
     }
+
+    /// Get the display symbol for this bullet
+    pub fn symbol(&self) -> &'static str {
+        let default_symbol = match self.bullet_type {
+            BulletType::Task => "•",
+            BulletType::Event => "○",
+            BulletType::Note => "—",
+            BulletType::Priority => "★",
+            BulletType::Inspiration => "!",
+            BulletType::Insight => "$",
+            BulletType::Misstep => "v",
+        };
+
+        if matches!(self.bullet_type, BulletType::Task | BulletType::Priority) {
+            match self.task_state {
+                Some(TaskState::Pending) => "•",
+                Some(TaskState::Completed) => "X",
+                Some(TaskState::Migrated) => ">",
+                Some(TaskState::Scheduled) => "<",
+                None => default_symbol,
+            }
+        } else {
+            default_symbol
+        }
+    }
 }
 
 // ============================================================================

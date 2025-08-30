@@ -1,5 +1,5 @@
 use super::theme::Theme;
-use crate::entities::Journal;
+use crate::entities::{Journal, BulletType, TaskState};
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use crossterm::ExecutableCommand;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, poll};
@@ -393,6 +393,70 @@ impl<'a> WeekView<'a> {
             .alignment(Alignment::Center)
     }
 
+    /// Create bullet display widget for the selected date
+    fn create_bullet_display(
+        entry: Option<&crate::entities::Entry>,
+        theme: &Theme,
+    ) -> Paragraph<'static> {
+        let entry = match entry {
+            Some(entry) => entry,
+            None => {
+                return Paragraph::new(vec![Line::from(vec![Span::styled(
+                    "No entry for this date".to_string(),
+                    Style::default().fg(theme.colors.dimmed),
+                )])])
+                .block(Block::default().borders(Borders::NONE))
+                .alignment(Alignment::Left)
+            }
+        };
+
+        let mut lines = Vec::new();
+        
+        let bullet_types = [
+            BulletType::Task,
+            BulletType::Event,
+            BulletType::Note,
+            BulletType::Priority,
+            BulletType::Inspiration,
+            BulletType::Insight,
+            BulletType::Misstep,
+        ];
+
+        for bullet_type in bullet_types {
+            let bullets = entry.get_bullets(&bullet_type);
+            for bullet in bullets {
+                let symbol = bullet.symbol();
+
+                let bullet_style = match bullet_type {
+                    BulletType::Priority => Style::default().fg(Color::Yellow),
+                    BulletType::Task if bullet.task_state == Some(TaskState::Completed) => {
+                        Style::default().fg(Color::Green)
+                    }
+                    BulletType::Inspiration => Style::default().fg(Color::Cyan),
+                    BulletType::Insight => Style::default().fg(Color::Magenta),
+                    BulletType::Misstep => Style::default().fg(Color::Red),
+                    _ => Style::default().fg(theme.colors.focused),
+                };
+
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{} ", symbol), bullet_style),
+                    Span::styled(bullet.content.clone(), Style::default().fg(theme.colors.focused)),
+                ]));
+            }
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::from(vec![Span::styled(
+                "No bullets for this date".to_string(),
+                Style::default().fg(theme.colors.dimmed),
+            )]));
+        }
+
+        Paragraph::new(lines)
+            .block(Block::default().borders(Borders::NONE))
+            .alignment(Alignment::Left)
+    }
+
     /// Run the week view TUI loop
     pub fn run(&mut self) -> io::Result<WeekViewResult> {
         loop {
@@ -408,6 +472,11 @@ impl<'a> WeekView<'a> {
 
             // Get entry statuses before drawing (requires mutable access to journal)
             let entry_statuses = self.get_entry_statuses(&weeks);
+            
+            // Get the selected date's entry for bullet display
+            let selected_entry = self.journal.get_entry(self.selected_date)
+                .unwrap_or(None)
+                .cloned();
 
             // Capture the state we need for drawing (after mutable borrow is complete)
             let current_week_start = self.current_week_start;
@@ -421,6 +490,7 @@ impl<'a> WeekView<'a> {
                 // Calculate the total space needed for our UI
                 const CALENDAR_HEIGHT: u16 = 18; // 5 weeks * 3 rows each + header + title
                 const HELP_HEIGHT: u16 = 3; // Help text (no borders)
+                const BULLET_HEIGHT: u16 = 8; // Space for bullet display
 
                 const MIN_CALENDAR_WIDTH: u16 = 78;
                 const MAX_CALENDAR_WIDTH: u16 = 100;
@@ -435,9 +505,9 @@ impl<'a> WeekView<'a> {
                 };
 
                 let total_height = if show_help {
-                    CALENDAR_HEIGHT + HELP_HEIGHT
+                    CALENDAR_HEIGHT + BULLET_HEIGHT + HELP_HEIGHT
                 } else {
-                    CALENDAR_HEIGHT
+                    CALENDAR_HEIGHT + BULLET_HEIGHT
                 };
 
                 // Calculate centered area for the entire UI
@@ -457,18 +527,35 @@ impl<'a> WeekView<'a> {
                         .direction(Direction::Vertical)
                         .constraints([
                             Constraint::Length(CALENDAR_HEIGHT), // Main week view
+                            Constraint::Length(BULLET_HEIGHT),   // Bullet display
                             Constraint::Length(HELP_HEIGHT),     // Help text
                         ])
                         .split(centered_area);
 
                     frame.render_widget(table, main_chunks[0]);
+                    
+                    // Create and draw bullet display
+                    let bullet_display = Self::create_bullet_display(selected_entry.as_ref(), theme);
+                    frame.render_widget(bullet_display, main_chunks[1]);
 
                     // Create and draw help
                     let help = Self::create_help_text_static(selected_date, theme);
-                    frame.render_widget(help, main_chunks[1]);
+                    frame.render_widget(help, main_chunks[2]);
                 } else {
-                    // Just draw the calendar
-                    frame.render_widget(table, centered_area);
+                    // Create vertical layout for calendar and bullets
+                    let main_chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Length(CALENDAR_HEIGHT), // Main week view
+                            Constraint::Length(BULLET_HEIGHT),   // Bullet display
+                        ])
+                        .split(centered_area);
+
+                    frame.render_widget(table, main_chunks[0]);
+                    
+                    // Create and draw bullet display
+                    let bullet_display = Self::create_bullet_display(selected_entry.as_ref(), theme);
+                    frame.render_widget(bullet_display, main_chunks[1]);
                 }
             })?;
 
