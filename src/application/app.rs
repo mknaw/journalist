@@ -99,7 +99,7 @@ impl JournalApp {
 
         // Write current content or template to temp file
         let content = if let Some(ref entry) = existing_entry {
-            self.parser.serialize(entry)?
+            self.parser.serialize_for_editing(entry)?
         } else {
             MarkdownParser::empty_template()
         };
@@ -210,12 +210,22 @@ mod tests {
         let existing_entry = storage.load_entry(date).unwrap().unwrap();
         assert_eq!(existing_entry.total_bullets(), 3);
 
-        // 3. Serialize to markdown for temp file
-        let temp_file_content = parser.serialize(&existing_entry).unwrap();
+        // 3. Serialize to markdown for temp file (should show ALL headers for editing)
+        let temp_file_content = parser.serialize_for_editing(&existing_entry).unwrap();
 
-        let expected_content =
-            "# Tasks\nSample task\n\n# Events\nSample event\n\n# Notes\nSample note\n\n";
-        assert_eq!(temp_file_content, expected_content);
+        // Should include ALL headers, even empty ones, for better editing UX
+        assert!(temp_file_content.contains("# Tasks"));
+        assert!(temp_file_content.contains("# Events")); 
+        assert!(temp_file_content.contains("# Notes"));
+        assert!(temp_file_content.contains("# Priority"));
+        assert!(temp_file_content.contains("# Inspiration"));
+        assert!(temp_file_content.contains("# Insights"));
+        assert!(temp_file_content.contains("# Missteps"));
+        
+        // Should also include the existing content
+        assert!(temp_file_content.contains("Sample task"));
+        assert!(temp_file_content.contains("Sample event"));
+        assert!(temp_file_content.contains("Sample note"));
 
         // 4. Simulate user editing (adding and modifying content)
         let edited_content = "# Tasks\nSample task\nNew task added\n\n# Events\nSample event\n\n# Notes\nSample note\nAdded some notes\n";

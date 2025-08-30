@@ -295,7 +295,7 @@ impl<'a> WeekView<'a> {
         .block(
             Block::default()
                 .borders(Borders::NONE)
-                .title(format!("{}", selected_date.format("%B %Y")))
+                .title(format!("{}  ", selected_date.format("%B %Y")))
                 .title_style(Style::default().fg(theme.colors.header))
                 .title_alignment(Alignment::Center),
         )

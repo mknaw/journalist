@@ -1,9 +1,14 @@
+// TODO I cannot for the life of me figure out how to exec
+// `PRAGMA create_fts_index('bullets', 'id', 'content');`
+// through the rust duckdb bindings... very whack.
+
 use crate::entities::{Bullet, BulletType, DateRange, Entry, TaskState};
 use crate::infrastructure::repository::EntryRepository;
 use crate::infrastructure::storage::JournalStorage;
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
-use duckdb::{Config, Connection, params};
+use duckdb::{Connection, params};
+use log::{debug, info};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,27 +24,25 @@ unsafe impl Sync for DuckDbStorage {}
 
 impl DuckDbStorage {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
-        let config = Config::default();
-        config.enable_autoload_extension(true)?;
-        // TODO or `open_in_memory`?
-        let conn = Connection::open_with_flags(db_path, Config::default())
-            .context("Failed to open DuckDB connection")?;
-        
-        conn.execute("INSTALL fts;", [])?;
-        conn.execute("LOAD fts;", [])?;
+        let conn = Connection::open(db_path)?;
+        debug!("DuckDB connection opened");
 
         let storage = Self {
             conn: Mutex::new(conn),
         };
         storage.initialize()?;
+        info!("DuckDB storage initialized successfully");
         Ok(storage)
     }
 }
 
 impl JournalStorage for DuckDbStorage {
     fn initialize(&self) -> Result<()> {
+        debug!("Setting up migration system");
         self.set_up_migration_system()?;
+        debug!("Running migrations");
         self.run_migrations()?;
+        debug!("Storage initialization complete");
         Ok(())
     }
 
@@ -48,19 +51,24 @@ impl JournalStorage for DuckDbStorage {
     }
 
     fn maintenance(&self) -> Result<()> {
+        debug!("Starting database maintenance operations");
         let conn = self.conn.lock().unwrap();
         conn.execute_batch("VACUUM; ANALYZE;")
             .context("Failed to perform maintenance operations")?;
+        info!("Database maintenance completed successfully");
         Ok(())
     }
 
     fn load_entry(&self, date: NaiveDate) -> Result<Option<Entry>> {
+        debug!("Loading entry for date: {}", date);
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare("SELECT content, type, task_state FROM bullets WHERE date = ? ORDER BY id")
             .context("Failed to prepare select statement")?;
 
-        let rows = stmt.query_map(params![date.format("%Y-%m-%d").to_string()], |row| {
+        let date_str = date.format("%Y-%m-%d").to_string();
+        debug!("Querying bullets for date: {}", date_str);
+        let rows = stmt.query_map(params![date_str], |row| {
             let content: String = row.get(0)?;
             let type_str: String = row.get(1)?;
             let task_state_str: Option<String> = row.get(2)?;
@@ -103,13 +111,24 @@ impl JournalStorage for DuckDbStorage {
         }
 
         if has_bullets {
+            debug!(
+                "Loaded entry for {} with {} bullets",
+                date,
+                entry.total_bullets()
+            );
             Ok(Some(entry))
         } else {
+            debug!("No bullets found for date: {}", date);
             Ok(None)
         }
     }
 
     fn load_entries(&self, range: DateRange) -> Result<Vec<Entry>> {
+        debug!(
+            "Loading entries for range: {} to {}",
+            range.start(),
+            range.end()
+        );
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT date, content, type, task_state FROM bullets WHERE date BETWEEN ? AND ? ORDER BY date, id"
@@ -169,10 +188,21 @@ impl JournalStorage for DuckDbStorage {
 
         let mut entries: Vec<Entry> = entries_map.into_values().collect();
         entries.sort_by_key(|e| e.date);
+        debug!(
+            "Loaded {} entries in range {} to {}",
+            entries.len(),
+            range.start(),
+            range.end()
+        );
         Ok(entries)
     }
 
     fn list_dates(&self, range: DateRange) -> Result<Vec<NaiveDate>> {
+        debug!(
+            "Listing dates for range: {} to {}",
+            range.start(),
+            range.end()
+        );
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare("SELECT DISTINCT date FROM bullets WHERE date BETWEEN ? AND ? ORDER BY date")
@@ -197,14 +227,26 @@ impl JournalStorage for DuckDbStorage {
             dates.push(date);
         }
 
+        debug!(
+            "Found {} dates in range {} to {}",
+            dates.len(),
+            range.start(),
+            range.end()
+        );
         Ok(dates)
     }
 
     fn save_entry(&self, entry: &Entry) -> Result<()> {
+        debug!(
+            "Saving entry for date: {} with {} total bullets",
+            entry.date,
+            entry.total_bullets()
+        );
         let conn = self.conn.lock().unwrap();
         let date_str = entry.date.format("%Y-%m-%d").to_string();
 
         // Delete existing bullets for this date
+        debug!("Deleting existing bullets for date: {}", date_str);
         conn.execute("DELETE FROM bullets WHERE date = ?", params![date_str])
             .context("Failed to delete existing bullets")?;
 
@@ -213,9 +255,19 @@ impl JournalStorage for DuckDbStorage {
             .prepare("INSERT INTO bullets (date, content, type, task_state) VALUES (?, ?, ?, ?)")
             .context("Failed to prepare insert statement")?;
 
+        let mut bullet_count = 0;
         for (bullet_type, bullets) in &entry.bullets {
+            debug!(
+                "Inserting {} bullets of type: {}",
+                bullets.len(),
+                bullet_type
+            );
             for bullet in bullets {
                 let task_state_str = bullet.task_state.as_ref().map(|s| s.to_string());
+                debug!(
+                    "Inserting bullet: {} (type: {}, state: {:?})",
+                    bullet.content, bullet_type, task_state_str
+                );
                 stmt.execute(params![
                     date_str,
                     bullet.content,
@@ -223,23 +275,32 @@ impl JournalStorage for DuckDbStorage {
                     task_state_str
                 ])
                 .context("Failed to insert bullet")?;
+                bullet_count += 1;
             }
         }
 
+        info!(
+            "Successfully saved {} bullets for date: {}",
+            bullet_count, entry.date
+        );
         Ok(())
     }
 
     fn delete_entry(&self, date: NaiveDate) -> Result<()> {
+        debug!("Deleting entry for date: {}", date);
         let conn = self.conn.lock().unwrap();
         let date_str = date.format("%Y-%m-%d").to_string();
 
-        conn.execute("DELETE FROM bullets WHERE date = ?", params![date_str])
+        let affected_rows = conn
+            .execute("DELETE FROM bullets WHERE date = ?", params![date_str])
             .context("Failed to delete entry")?;
 
+        info!("Deleted {} bullets for date: {}", affected_rows, date);
         Ok(())
     }
 
     fn search_entries(&self, query: &str) -> Result<Vec<Entry>> {
+        debug!("Searching entries with query: '{}'", query);
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
@@ -264,15 +325,18 @@ impl JournalStorage for DuckDbStorage {
             }
         }
 
+        info!("Search for '{}' returned {} entries", query, entries.len());
         Ok(entries)
     }
 
     fn count_entries(&self) -> Result<u64> {
+        debug!("Counting total entries");
         let conn = self.conn.lock().unwrap();
         let count: i64 = conn.query_row("SELECT COUNT(DISTINCT date) FROM bullets", [], |row| {
             row.get(0)
         })?;
 
+        debug!("Total entries count: {}", count);
         Ok(count as u64)
     }
 
@@ -296,6 +360,7 @@ impl JournalStorage for DuckDbStorage {
 
 impl DuckDbStorage {
     fn set_up_migration_system(&self) -> Result<()> {
+        debug!("Setting up migration system");
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(
             r#"
@@ -307,27 +372,41 @@ impl DuckDbStorage {
         "#,
         )
         .context("Failed to create migrations table")?;
+        debug!("Migration system table created/verified");
         Ok(())
     }
 
     fn run_migrations(&self) -> Result<()> {
+        debug!("Running database migrations");
         let migrations = self.discover_migrations()?;
         let applied = self.get_applied_migrations()?;
 
+        debug!(
+            "Found {} total migrations, {} already applied",
+            migrations.len(),
+            applied.len()
+        );
+
         for (version, name, sql_content) in migrations {
             if !applied.contains(&version) {
+                info!("Applying migration {}: {}", version, name);
                 self.apply_migration(version, &name, &sql_content)
                     .with_context(|| format!("Failed to apply migration {}: {}", version, name))?;
+            } else {
+                debug!("Migration {} already applied, skipping", version);
             }
         }
 
+        info!("All migrations completed successfully");
         Ok(())
     }
 
     fn discover_migrations(&self) -> Result<Vec<(i32, String, String)>> {
         let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+        debug!("Looking for migrations in: {:?}", migrations_dir);
 
         if !migrations_dir.exists() {
+            debug!("Migrations directory does not exist, skipping");
             return Ok(vec![]);
         }
 
@@ -358,10 +437,12 @@ impl DuckDbStorage {
         }
 
         migrations.sort_by_key(|(version, _, _)| *version);
+        debug!("Discovered {} migration files", migrations.len());
         Ok(migrations)
     }
 
     fn get_applied_migrations(&self) -> Result<std::collections::HashSet<i32>> {
+        debug!("Querying applied migrations from database");
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare("SELECT version FROM migrations ORDER BY version")
@@ -374,30 +455,44 @@ impl DuckDbStorage {
 
         let mut applied = std::collections::HashSet::new();
         for version in rows {
-            applied.insert(version?);
+            let v = version?;
+            applied.insert(v);
+            debug!("Found applied migration version: {}", v);
         }
 
+        debug!("Total applied migrations: {}", applied.len());
         Ok(applied)
     }
 
     fn apply_migration(&self, version: i32, name: &str, sql_content: &str) -> Result<()> {
+        debug!("Applying migration {} ({})", version, name);
         let conn = self.conn.lock().unwrap();
 
         // Execute the migration SQL
+        debug!("Executing migration SQL for {}", name);
         conn.execute_batch(sql_content)
             .with_context(|| format!("Failed to execute migration SQL for {}", name))?;
+        debug!("Migration SQL executed successfully for {}", name);
 
         // Record the migration as applied
+        debug!("Recording migration {} as applied", version);
         conn.execute(
             "INSERT INTO migrations (version, name) VALUES (?, ?)",
             params![version, name],
         )
         .with_context(|| format!("Failed to record migration {} as applied", name))?;
 
+        info!("Migration {} ({}) applied successfully", version, name);
         Ok(())
     }
 
     fn find_entries_by_type(&self, bullet_type: &str, range: DateRange) -> Result<Vec<Entry>> {
+        debug!(
+            "Finding entries with bullet type '{}' in range {} to {}",
+            bullet_type,
+            range.start(),
+            range.end()
+        );
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT DISTINCT date FROM bullets WHERE type = ? AND date BETWEEN ? AND ? ORDER BY date"
@@ -425,6 +520,11 @@ impl DuckDbStorage {
             }
         }
 
+        debug!(
+            "Found {} entries with bullet type '{}'",
+            entries.len(),
+            bullet_type
+        );
         Ok(entries)
     }
 }

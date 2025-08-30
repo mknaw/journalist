@@ -12,4 +12,5 @@ CREATE TABLE IF NOT EXISTS bullets (
 
 CREATE INDEX IF NOT EXISTS idx_bullets_date ON bullets(date);
 
-PRAGMA create_fts_index('bullets', 'id', 'content');
+-- TODO for the life of me I cannot figure out how to do this.
+-- PRAGMA create_fts_index('bullets', 'id', 'content');

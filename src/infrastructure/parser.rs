@@ -70,6 +70,32 @@ impl MarkdownParser {
         Ok(content)
     }
 
+    /// Serialize entry for editing - always shows all headers for better UX
+    pub fn serialize_for_editing(&self, entry: &Entry) -> Result<String> {
+        let mut content = String::new();
+
+        let sections = [
+            (BulletType::Task, "# Tasks"),
+            (BulletType::Event, "# Events"),
+            (BulletType::Note, "# Notes"),
+            (BulletType::Priority, "# Priority"),
+            (BulletType::Inspiration, "# Inspiration"),
+            (BulletType::Insight, "# Insights"),
+            (BulletType::Misstep, "# Missteps"),
+        ];
+
+        for (bullet_type, section_header) in sections {
+            let bullets = entry.get_bullets(&bullet_type);
+            content.push_str(&format!("{}\n", section_header));
+            for bullet in bullets {
+                content.push_str(&format!("{}\n", bullet.content));
+            }
+            content.push('\n');
+        }
+
+        Ok(content)
+    }
+
     /// Generate empty template for new entries
     pub fn empty_template() -> String {
         "# Tasks\n\n# Events\n\n# Notes\n\n# Priority\n\n# Inspiration\n\n# Insights\n\n# Missteps\n\n".to_string()
@@ -243,6 +269,32 @@ mod tests {
         // Tasks should come before Events, which should come before Insights
         assert!(task_line < event_line);
         assert!(event_line < insight_line);
+    }
+
+    #[test]
+    fn test_serialize_for_editing_shows_all_headers() {
+        let parser = MarkdownParser::new();
+        let date = NaiveDate::from_ymd_opt(2024, 3, 15).unwrap();
+        let mut entry = Entry::new(date);
+        
+        // Add bullets to only some sections
+        entry.add_bullet(Bullet::new("Only task", BulletType::Task));
+        entry.add_bullet(Bullet::new("Only note", BulletType::Note));
+        
+        let result = parser.serialize_for_editing(&entry).unwrap();
+        
+        // Should include ALL headers even for empty sections
+        assert!(result.contains("# Tasks"));
+        assert!(result.contains("# Events"));
+        assert!(result.contains("# Notes"));
+        assert!(result.contains("# Priority"));
+        assert!(result.contains("# Inspiration"));
+        assert!(result.contains("# Insights"));
+        assert!(result.contains("# Missteps"));
+        
+        // Should include the actual content too
+        assert!(result.contains("Only task"));
+        assert!(result.contains("Only note"));
     }
 
     #[test]
