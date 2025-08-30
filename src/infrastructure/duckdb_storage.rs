@@ -24,6 +24,14 @@ unsafe impl Sync for DuckDbStorage {}
 
 impl DuckDbStorage {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
+        let db_path = db_path.as_ref();
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = db_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+
         let conn = Connection::open(db_path)?;
         debug!("DuckDB connection opened");
 

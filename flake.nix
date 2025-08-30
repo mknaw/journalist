@@ -9,27 +9,35 @@
     pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, pre-commit-hooks }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      rust-overlay,
+      pre-commit-hooks,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = import nixpkgs {
           inherit system;
           overlays = [ (import rust-overlay) ];
         };
-        
+
         journo = pkgs.rustPlatform.buildRustPackage {
           pname = "journo";
           version = "0.0.1";
-          
+
           src = pkgs.lib.cleanSource ./.;
-          
+
           cargoLock = {
             lockFile = ./Cargo.lock;
           };
-          
+
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [ duckdb ];
-          
+
           meta = with pkgs.lib; {
             description = "TUI Bullet Journal";
             homepage = "https://github.com/mknaw/journo";
@@ -62,11 +70,16 @@
         };
 
         packages.default = journo;
-        
+
         devShell = mkShell {
           buildInputs = self.checks.${system}.pre-commit-check.enabledPackages ++ [
             (rust-bin.stable.latest.minimal.override {
-              extensions = [ "clippy" "rust-analyzer" "rust-docs" "rust-src" ];
+              extensions = [
+                "clippy"
+                "rust-analyzer"
+                "rust-docs"
+                "rust-src"
+              ];
             })
             # We use nightly rustfmt features.
             (rust-bin.selectLatestNightlyWith (toolchain: toolchain.rustfmt))
@@ -76,6 +89,11 @@
             cargo-sort
             bacon
           ];
+
+          shellHook = ''
+            ${self.checks.${system}.pre-commit-check.shellHook}
+          '';
         };
-      });
+      }
+    );
 }
