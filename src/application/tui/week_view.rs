@@ -1,19 +1,21 @@
 use super::theme::Theme;
 use crate::entities::Journal;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, poll};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::tty::IsTty;
 use crossterm::ExecutableCommand;
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, poll};
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use crossterm::tty::IsTty;
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table},
-    Terminal,
 };
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
 
 #[derive(Debug, Clone)]
 pub enum WeekViewResult {
@@ -51,26 +53,34 @@ impl<'a> WeekView<'a> {
                 "Not running in a TTY, cannot initialize terminal interface",
             ));
         }
-        
-        enable_raw_mode()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to enable raw mode: {}", e)))?;
-        
-        stdout().execute(EnterAlternateScreen)
-            .map_err(|e| {
-                let _ = disable_raw_mode(); // Clean up on failure
-                io::Error::new(io::ErrorKind::Other, format!("Failed to enter alternate screen: {}", e))
-            })?;
-        
+
+        enable_raw_mode().map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to enable raw mode: {}", e),
+            )
+        })?;
+
+        stdout().execute(EnterAlternateScreen).map_err(|e| {
+            let _ = disable_raw_mode(); // Clean up on failure
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to enter alternate screen: {}", e),
+            )
+        })?;
+
         let backend = CrosstermBackend::new(stdout());
-        let terminal = Terminal::new(backend)
-            .map_err(|e| {
-                let _ = disable_raw_mode();
-                let _ = stdout().execute(LeaveAlternateScreen);
-                io::Error::new(io::ErrorKind::Other, format!("Failed to create terminal: {}", e))
-            })?;
-        
+        let terminal = Terminal::new(backend).map_err(|e| {
+            let _ = disable_raw_mode();
+            let _ = stdout().execute(LeaveAlternateScreen);
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to create terminal: {}", e),
+            )
+        })?;
+
         let week_start = Self::get_week_start(initial_date);
-        
+
         Ok(Self {
             current_week_start: week_start,
             selected_date: initial_date,
@@ -82,7 +92,7 @@ impl<'a> WeekView<'a> {
             journal,
         })
     }
-    
+
     /// Get the start of the week (Sunday) for a given date
     fn get_week_start(date: NaiveDate) -> NaiveDate {
         let days_since_sunday = match date.weekday() {
@@ -96,21 +106,24 @@ impl<'a> WeekView<'a> {
         };
         date - Duration::days(days_since_sunday as i64)
     }
-    
+
     /// Generate dates for a week starting from the given Sunday
     fn get_week_dates(week_start: NaiveDate) -> Vec<NaiveDate> {
         (0..7).map(|i| week_start + Duration::days(i)).collect()
     }
-    
+
     /// Check if a date has an entry in the journal
     fn has_entry(&mut self, date: NaiveDate) -> bool {
         self.journal.get_entry(date).unwrap_or(None).is_some()
     }
-    
+
     /// Get entry status for all dates in the given range
-    fn get_entry_statuses(&mut self, weeks: &[NaiveDate]) -> std::collections::HashMap<NaiveDate, bool> {
+    fn get_entry_statuses(
+        &mut self,
+        weeks: &[NaiveDate],
+    ) -> std::collections::HashMap<NaiveDate, bool> {
         let mut statuses = std::collections::HashMap::new();
-        
+
         for &week_start in weeks {
             let dates = Self::get_week_dates(week_start);
             for date in dates {
@@ -118,27 +131,27 @@ impl<'a> WeekView<'a> {
                 statuses.insert(date, has_entry);
             }
         }
-        
+
         statuses
     }
-    
+
     /// Calculate centered area with both horizontal and vertical centering
     fn calculate_centered_area(available: Rect, needed_width: u16, needed_height: u16) -> Rect {
         let width = std::cmp::min(available.width, needed_width);
         let height = std::cmp::min(available.height, needed_height);
-        
+
         let left_margin = if available.width > width {
             (available.width - width) / 2
         } else {
             0
         };
-        
+
         let top_margin = if available.height > height {
             (available.height - height) / 2
         } else {
             0
         };
-        
+
         Rect {
             x: available.x + left_margin,
             y: available.y + top_margin,
@@ -146,40 +159,46 @@ impl<'a> WeekView<'a> {
             height,
         }
     }
-    
+
     /// Get styling for a date cell based on various conditions (static version)
-    fn get_date_style_static(date: NaiveDate, is_focused_week: bool, selected_date: NaiveDate, theme: &Theme) -> Style {
+    fn get_date_style_static(
+        date: NaiveDate,
+        is_focused_week: bool,
+        selected_date: NaiveDate,
+        theme: &Theme,
+    ) -> Style {
         let is_selected = date == selected_date;
         let is_today = date == chrono::Local::now().date_naive();
         let is_weekend = matches!(date.weekday(), Weekday::Sat | Weekday::Sun);
-        
+
         if is_selected {
-            // Subtle selection - just underlined
+            // Subtle selection - slightly lighter background
+            let light_bg = Color::Rgb(40, 40, 40);
             if is_weekend {
-                theme.colors.weekend.to_ratatui_with_modifier(Modifier::UNDERLINED)
+                Style::default().fg(theme.colors.weekend).bg(light_bg)
             } else if is_focused_week {
-                theme.colors.focused.to_ratatui_with_modifier(Modifier::UNDERLINED)
+                Style::default().fg(theme.colors.focused).bg(light_bg)
             } else {
-                theme.colors.dimmed.to_ratatui_with_modifier(Modifier::UNDERLINED)
+                Style::default().fg(theme.colors.dimmed).bg(light_bg)
             }
         } else if is_today {
-            theme.colors.today.to_ratatui_with_modifier(Modifier::BOLD)
+            Style::default().fg(theme.colors.today).add_modifier(Modifier::BOLD)
         } else if is_weekend {
-            theme.colors.weekend.to_ratatui()
+            Style::default().fg(theme.colors.weekend)
         } else if is_focused_week {
-            theme.colors.focused.to_ratatui()
+            Style::default().fg(theme.colors.focused)
         } else {
-            theme.colors.dimmed.to_ratatui()
+            Style::default().fg(theme.colors.dimmed)
         }
     }
-    
+
     /// Create a table row for a week (static version)
     fn create_week_row_static(
-        week_start: NaiveDate, 
-        is_focused: bool, 
-        selected_date: NaiveDate, 
-        theme: &Theme, 
-        entry_statuses: &std::collections::HashMap<NaiveDate, bool>
+        week_start: NaiveDate,
+        is_focused: bool,
+        selected_date: NaiveDate,
+        theme: &Theme,
+        entry_statuses: &std::collections::HashMap<NaiveDate, bool>,
     ) -> Row<'static> {
         let dates = Self::get_week_dates(week_start);
         let cells: Vec<Cell> = dates
@@ -188,91 +207,101 @@ impl<'a> WeekView<'a> {
                 let day = date.day();
                 let has_entry = *entry_statuses.get(&date).unwrap_or(&false);
                 let _is_today = date == chrono::Local::now().date_naive();
-                
+
                 // Get base style (row style will handle background)
                 let style = Self::get_date_style_static(date, is_focused, selected_date, theme);
-                
+
                 // Show month indicator on the 1st of each month
                 let day_text = if day == 1 {
                     format!("{} {}", date.format("%b"), day)
                 } else {
                     day.to_string()
                 };
-                
+
                 // Add entry indicator (small dot)
                 let content = if has_entry {
                     format!("{}•", day_text)
                 } else {
                     format!("{} ", day_text) // space to keep alignment
                 };
-                
+
                 Cell::from(content).style(style)
             })
             .collect();
-        
+
         let mut row = Row::new(cells);
-        
+
         // Apply focused week background to the entire row
         if is_focused {
-            row = row.style(theme.colors.focused_week_bg.to_ratatui());
+            row = row.style(Style::default().bg(theme.colors.focused_week_bg));
         }
-        
+
         row
     }
-    
+
     /// Create the week view table (static version for drawing)
     fn create_week_table_static(
-        current_week_start: NaiveDate, 
-        selected_date: NaiveDate, 
-        theme: &Theme, 
-        entry_statuses: &std::collections::HashMap<NaiveDate, bool>
+        current_week_start: NaiveDate,
+        selected_date: NaiveDate,
+        theme: &Theme,
+        entry_statuses: &std::collections::HashMap<NaiveDate, bool>,
     ) -> Table<'static> {
         let focused_week = current_week_start;
-        
+
         // Generate 5 weeks: 2 before, focused week, 2 after
         let weeks: Vec<NaiveDate> = (-2..=2)
             .map(|offset| focused_week + Duration::weeks(offset))
             .collect();
-        
+
         let header = Row::new(vec![
-            Cell::from("Sun").style(theme.colors.weekend.to_ratatui()),
-            Cell::from("Mon").style(theme.colors.header.to_ratatui()),
-            Cell::from("Tue").style(theme.colors.header.to_ratatui()),
-            Cell::from("Wed").style(theme.colors.header.to_ratatui()),
-            Cell::from("Thu").style(theme.colors.header.to_ratatui()),
-            Cell::from("Fri").style(theme.colors.header.to_ratatui()),
-            Cell::from("Sat").style(theme.colors.weekend.to_ratatui()),
-        ]).height(1);
-        
+            Cell::from("Sun").style(Style::default().fg(theme.colors.weekend)),
+            Cell::from("Mon").style(Style::default().fg(theme.colors.header)),
+            Cell::from("Tue").style(Style::default().fg(theme.colors.header)),
+            Cell::from("Wed").style(Style::default().fg(theme.colors.header)),
+            Cell::from("Thu").style(Style::default().fg(theme.colors.header)),
+            Cell::from("Fri").style(Style::default().fg(theme.colors.header)),
+            Cell::from("Sat").style(Style::default().fg(theme.colors.weekend)),
+        ])
+        .height(1);
+
         let rows: Vec<Row> = weeks
             .iter()
             .enumerate()
             .map(|(i, &week_start)| {
                 let is_focused = i == 2; // Middle row (index 2) is focused
-                Self::create_week_row_static(week_start, is_focused, selected_date, theme, entry_statuses)
+                Self::create_week_row_static(
+                    week_start,
+                    is_focused,
+                    selected_date,
+                    theme,
+                    entry_statuses,
+                )
             })
             .collect();
-        
-        Table::new(rows, [
-            Constraint::Percentage(14), // ~14.3% each for 7 columns
-            Constraint::Percentage(14),
-            Constraint::Percentage(14),
-            Constraint::Percentage(14),
-            Constraint::Percentage(14),
-            Constraint::Percentage(15),
-            Constraint::Percentage(15),
-        ])
+
+        Table::new(
+            rows,
+            [
+                Constraint::Percentage(14), // ~14.3% each for 7 columns
+                Constraint::Percentage(14),
+                Constraint::Percentage(14),
+                Constraint::Percentage(14),
+                Constraint::Percentage(14),
+                Constraint::Percentage(15),
+                Constraint::Percentage(15),
+            ],
+        )
         .header(header)
         .block(
             Block::default()
                 .borders(Borders::NONE)
                 .title(format!("{}", selected_date.format("%B %Y")))
-                .title_style(theme.colors.header.to_ratatui())
-                .title_alignment(Alignment::Center)
+                .title_style(Style::default().fg(theme.colors.header))
+                .title_alignment(Alignment::Center),
         )
         .column_spacing(1)
     }
-    
+
     /// Handle keyboard input
     fn handle_key_event(&mut self, key: KeyEvent) {
         match (key.code, key.modifiers) {
@@ -280,12 +309,13 @@ impl<'a> WeekView<'a> {
             (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => {
                 self.should_exit = true;
             }
-            
+
             // Ctrl+C and Ctrl+D
-            (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+            (KeyCode::Char('c'), KeyModifiers::CONTROL)
+            | (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
                 self.should_exit = true;
             }
-            
+
             // Navigation - Arrow keys
             (KeyCode::Left, _) | (KeyCode::Char('h'), _) => {
                 self.selected_date = self.selected_date - Duration::days(1);
@@ -303,24 +333,24 @@ impl<'a> WeekView<'a> {
                 self.selected_date = self.selected_date + Duration::weeks(1);
                 self.update_current_week();
             }
-            
+
             // Jump to today
             (KeyCode::Char('t'), _) => {
                 self.selected_date = chrono::Local::now().date_naive();
                 self.update_current_week();
             }
-            
+
             // Enter to edit selected date
             (KeyCode::Enter, _) => {
                 self.should_edit = true;
                 self.should_exit = true;
             }
-            
+
             // Toggle help
             (KeyCode::Char('?'), _) => {
                 self.show_help = !self.show_help;
             }
-            
+
             // Jump by month
             (KeyCode::PageUp, _) => {
                 self.selected_date = self.selected_date - Duration::days(30);
@@ -330,37 +360,39 @@ impl<'a> WeekView<'a> {
                 self.selected_date = self.selected_date + Duration::days(30);
                 self.update_current_week();
             }
-            
+
             _ => {}
         }
     }
-    
+
     /// Update the current week focus based on selected date
     fn update_current_week(&mut self) {
         let selected_week_start = Self::get_week_start(self.selected_date);
-        
+
         // Only update if we've moved to a different week
         if selected_week_start != self.current_week_start {
             self.current_week_start = selected_week_start;
         }
     }
-    
+
     /// Create help text (static version)
     fn create_help_text_static(selected_date: NaiveDate, theme: &Theme) -> Paragraph<'static> {
         let help_text = vec![
-            Line::from(vec![
-                Span::styled("↑↓/jk=Week • ←→/hl=Day • PgUp/PgDn=Month • t=Today • Enter=Edit • ?=Help • q=Quit", theme.colors.dimmed.to_ratatui()),
-            ]),
-            Line::from(vec![
-                Span::styled(format!("{}", selected_date.format("%A, %B %d, %Y")), theme.colors.focused.to_ratatui()),
-            ]),
+            Line::from(vec![Span::styled(
+                "↑↓/jk=Week • ←→/hl=Day • PgUp/PgDn=Month • t=Today • Enter=Edit • ?=Help • q=Quit",
+                Style::default().fg(theme.colors.dimmed),
+            )]),
+            Line::from(vec![Span::styled(
+                format!("{}", selected_date.format("%A, %B %d, %Y")),
+                Style::default().fg(theme.colors.focused),
+            )]),
         ];
-        
+
         Paragraph::new(help_text)
             .block(Block::default().borders(Borders::NONE))
             .alignment(Alignment::Center)
     }
-    
+
     /// Run the week view TUI loop
     pub fn run(&mut self) -> io::Result<WeekViewResult> {
         loop {
@@ -368,32 +400,32 @@ impl<'a> WeekView<'a> {
             if self.should_exit {
                 break;
             }
-            
+
             // Generate weeks we need to check for entry statuses
             let weeks: Vec<NaiveDate> = (-2..=2)
                 .map(|offset| self.current_week_start + Duration::weeks(offset))
                 .collect();
-            
+
             // Get entry statuses before drawing (requires mutable access to journal)
             let entry_statuses = self.get_entry_statuses(&weeks);
-            
+
             // Capture the state we need for drawing (after mutable borrow is complete)
             let current_week_start = self.current_week_start;
             let selected_date = self.selected_date;
             let show_help = self.show_help;
             let theme = &self.theme;
-            
+
             self.terminal.draw(|frame| {
                 let size = frame.area();
-                
+
                 // Calculate the total space needed for our UI
                 const CALENDAR_HEIGHT: u16 = 18; // 5 weeks * 3 rows each + header + title
-                const HELP_HEIGHT: u16 = 3;      // Help text (no borders)
-                
+                const HELP_HEIGHT: u16 = 3; // Help text (no borders)
+
                 const MIN_CALENDAR_WIDTH: u16 = 78;
                 const MAX_CALENDAR_WIDTH: u16 = 100;
                 const PREFERRED_CALENDAR_WIDTH: u16 = 86;
-                
+
                 let needed_width = if size.width >= MAX_CALENDAR_WIDTH + 10 {
                     PREFERRED_CALENDAR_WIDTH
                 } else if size.width >= MIN_CALENDAR_WIDTH + 4 {
@@ -401,19 +433,24 @@ impl<'a> WeekView<'a> {
                 } else {
                     std::cmp::min(size.width, MIN_CALENDAR_WIDTH)
                 };
-                
+
                 let total_height = if show_help {
                     CALENDAR_HEIGHT + HELP_HEIGHT
                 } else {
                     CALENDAR_HEIGHT
                 };
-                
+
                 // Calculate centered area for the entire UI
                 let centered_area = Self::calculate_centered_area(size, needed_width, total_height);
-                
+
                 // Create and draw week table
-                let table = Self::create_week_table_static(current_week_start, selected_date, theme, &entry_statuses);
-                
+                let table = Self::create_week_table_static(
+                    current_week_start,
+                    selected_date,
+                    theme,
+                    &entry_statuses,
+                );
+
                 if show_help {
                     // Create vertical layout within the centered area
                     let main_chunks = Layout::default()
@@ -423,9 +460,9 @@ impl<'a> WeekView<'a> {
                             Constraint::Length(HELP_HEIGHT),     // Help text
                         ])
                         .split(centered_area);
-                    
+
                     frame.render_widget(table, main_chunks[0]);
-                    
+
                     // Create and draw help
                     let help = Self::create_help_text_static(selected_date, theme);
                     frame.render_widget(help, main_chunks[1]);
@@ -434,7 +471,7 @@ impl<'a> WeekView<'a> {
                     frame.render_widget(table, centered_area);
                 }
             })?;
-            
+
             // Handle events with timeout to prevent blocking indefinitely
             match poll(std::time::Duration::from_millis(100))? {
                 true => {
@@ -458,10 +495,10 @@ impl<'a> WeekView<'a> {
                 }
             }
         }
-        
+
         // Ensure proper cleanup before returning
         self.cleanup()?;
-        
+
         // Return result based on user action
         if self.should_edit {
             Ok(WeekViewResult::EditRequested(self.selected_date))
@@ -469,7 +506,7 @@ impl<'a> WeekView<'a> {
             Ok(WeekViewResult::Exited(self.selected_date))
         }
     }
-    
+
     /// Explicit cleanup method
     fn cleanup(&mut self) -> io::Result<()> {
         disable_raw_mode()?;
