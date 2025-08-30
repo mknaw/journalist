@@ -215,13 +215,13 @@ mod tests {
 
         // Should include ALL headers, even empty ones, for better editing UX
         assert!(temp_file_content.contains("# Tasks"));
-        assert!(temp_file_content.contains("# Events")); 
+        assert!(temp_file_content.contains("# Events"));
         assert!(temp_file_content.contains("# Notes"));
         assert!(temp_file_content.contains("# Priority"));
         assert!(temp_file_content.contains("# Inspiration"));
         assert!(temp_file_content.contains("# Insights"));
         assert!(temp_file_content.contains("# Missteps"));
-        
+
         // Should also include the existing content
         assert!(temp_file_content.contains("Sample task"));
         assert!(temp_file_content.contains("Sample event"));

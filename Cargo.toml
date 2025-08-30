@@ -1,10 +1,10 @@
 [package]
-name = "journalist"
-version = "0.1.0"
+name = "journo"
+version = "0.0.1"
 edition = "2024"
 
 [[bin]]
-name = "journalist"
+name = "journo"
 path = "src/cli.rs"
 
 [dependencies]

@@ -14,7 +14,7 @@ impl Config {
             .unwrap_or_else(|_| {
                 dirs::data_local_dir()
                     .unwrap_or_else(|| PathBuf::from("."))
-                    .join("journalist")
+                    .join("journo")
             });
 
         let data_dir = journal_dir.join("data");

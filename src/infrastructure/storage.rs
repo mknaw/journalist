@@ -41,4 +41,3 @@ pub trait JournalStorage {
 
     fn refresh_metadata(&self, date: NaiveDate, entry: &Entry) -> Result<()>;
 }
-

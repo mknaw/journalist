@@ -173,4 +173,3 @@ mod tests {
         assert!(test_storage2.storage().load_entry(date).unwrap().is_none());
     }
 }
-

@@ -72,7 +72,11 @@ impl Bullet {
         }
     }
 
-    pub fn with_task_state(content: impl Into<String>, bullet_type: BulletType, state: TaskState) -> Self {
+    pub fn with_task_state(
+        content: impl Into<String>,
+        bullet_type: BulletType,
+        state: TaskState,
+    ) -> Self {
         Self {
             content: content.into(),
             bullet_type,
@@ -154,11 +158,15 @@ impl Entry {
     }
 
     pub fn get_bullets(&self, bullet_type: &BulletType) -> &[Bullet] {
-        self.bullets.get(bullet_type).map_or(&[], |bullets| bullets.as_slice())
+        self.bullets
+            .get(bullet_type)
+            .map_or(&[], |bullets| bullets.as_slice())
     }
 
     pub fn get_bullets_mut(&mut self, bullet_type: &BulletType) -> &mut Vec<Bullet> {
-        self.bullets.entry(bullet_type.clone()).or_insert_with(Vec::new)
+        self.bullets
+            .entry(bullet_type.clone())
+            .or_insert_with(Vec::new)
     }
 
     pub fn all_bullets(&self) -> impl Iterator<Item = &Bullet> {
@@ -170,7 +178,9 @@ impl Entry {
     }
 
     pub fn bullet_count(&self, bullet_type: &BulletType) -> usize {
-        self.bullets.get(bullet_type).map_or(0, |bullets| bullets.len())
+        self.bullets
+            .get(bullet_type)
+            .map_or(0, |bullets| bullets.len())
     }
 
     pub fn total_bullets(&self) -> usize {

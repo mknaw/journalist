@@ -886,8 +886,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "journalist"
-version = "0.1.0"
+name = "journo"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "chrono",

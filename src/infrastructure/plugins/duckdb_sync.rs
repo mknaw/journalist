@@ -46,4 +46,3 @@ impl WriteHook for DuckDbSyncHook {
         true
     }
 }
-

@@ -7,7 +7,7 @@ use chrono::{Local, NaiveDate};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "journalist")]
+#[command(name = "journo")]
 #[command(about = "A terminal-based bullet journal application")]
 #[command(version)]
 pub struct Cli {
@@ -63,7 +63,7 @@ impl Cli {
                         let mut week_view = WeekView::new(target_date, &mut app.journal)?;
                         week_view.run()?
                     }; // week_view is dropped here, releasing the borrow
-                    
+
                     match result {
                         WeekViewResult::EditRequested(selected_date) => {
                             app.edit_entry_for_date(selected_date)?;
@@ -79,13 +79,13 @@ impl Cli {
             None => {
                 // Default: start week view
                 let target_date = Local::now().naive_local().date();
-                
+
                 loop {
                     let result = {
                         let mut week_view = WeekView::new(target_date, &mut app.journal)?;
                         week_view.run()?
                     }; // week_view is dropped here, releasing the borrow
-                    
+
                     match result {
                         WeekViewResult::EditRequested(selected_date) => {
                             app.edit_entry_for_date(selected_date)?;

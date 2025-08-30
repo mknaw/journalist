@@ -1,5 +1,5 @@
 use super::theme::Theme;
-use crate::entities::{Journal, BulletType, TaskState};
+use crate::entities::{BulletType, Journal, TaskState};
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use crossterm::ExecutableCommand;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, poll};
@@ -182,7 +182,9 @@ impl<'a> WeekView<'a> {
                 Style::default().fg(theme.colors.dimmed).bg(light_bg)
             }
         } else if is_today {
-            Style::default().fg(theme.colors.today).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(theme.colors.today)
+                .add_modifier(Modifier::BOLD)
         } else if is_weekend {
             Style::default().fg(theme.colors.weekend)
         } else if is_focused_week {
@@ -406,12 +408,12 @@ impl<'a> WeekView<'a> {
                     Style::default().fg(theme.colors.dimmed),
                 )])])
                 .block(Block::default().borders(Borders::NONE))
-                .alignment(Alignment::Left)
+                .alignment(Alignment::Left);
             }
         };
 
         let mut lines = Vec::new();
-        
+
         let bullet_types = [
             BulletType::Task,
             BulletType::Event,
@@ -440,7 +442,10 @@ impl<'a> WeekView<'a> {
 
                 lines.push(Line::from(vec![
                     Span::styled(format!("{} ", symbol), bullet_style),
-                    Span::styled(bullet.content.clone(), Style::default().fg(theme.colors.focused)),
+                    Span::styled(
+                        bullet.content.clone(),
+                        Style::default().fg(theme.colors.focused),
+                    ),
                 ]));
             }
         }
@@ -472,9 +477,11 @@ impl<'a> WeekView<'a> {
 
             // Get entry statuses before drawing (requires mutable access to journal)
             let entry_statuses = self.get_entry_statuses(&weeks);
-            
+
             // Get the selected date's entry for bullet display
-            let selected_entry = self.journal.get_entry(self.selected_date)
+            let selected_entry = self
+                .journal
+                .get_entry(self.selected_date)
                 .unwrap_or(None)
                 .cloned();
 
@@ -533,9 +540,10 @@ impl<'a> WeekView<'a> {
                         .split(centered_area);
 
                     frame.render_widget(table, main_chunks[0]);
-                    
+
                     // Create and draw bullet display
-                    let bullet_display = Self::create_bullet_display(selected_entry.as_ref(), theme);
+                    let bullet_display =
+                        Self::create_bullet_display(selected_entry.as_ref(), theme);
                     frame.render_widget(bullet_display, main_chunks[1]);
 
                     // Create and draw help
@@ -552,9 +560,10 @@ impl<'a> WeekView<'a> {
                         .split(centered_area);
 
                     frame.render_widget(table, main_chunks[0]);
-                    
+
                     // Create and draw bullet display
-                    let bullet_display = Self::create_bullet_display(selected_entry.as_ref(), theme);
+                    let bullet_display =
+                        Self::create_bullet_display(selected_entry.as_ref(), theme);
                     frame.render_widget(bullet_display, main_chunks[1]);
                 }
             })?;

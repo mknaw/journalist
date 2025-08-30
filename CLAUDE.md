@@ -1,4 +1,4 @@
-# Journalist - TUI Bullet Journal
+# Journo - TUI Bullet Journal
 
 A terminal-based bullet journal application with calendar view, inspired by Ryder Carroll's Bullet Journal system.
 
@@ -78,7 +78,7 @@ The bullet symbols are used only for TUI display - the actual markdown uses head
 The journal uses a single DuckDB database file for all storage, eliminating filesystem complexity:
 
 ```
-$JOURNAL_DIR/                    # Default: ~/.local/share/journalist
+$JOURNAL_DIR/                    # Default: ~/.local/share/journo
 └── journal.db                   # Single DuckDB database file
 ```
 
@@ -100,7 +100,7 @@ When editing entries:
 
 ### Configuration
 
-- **Default Location**: `~/.local/share/journalist/` (follows XDG Base Directory Specification)
+- **Default Location**: `~/.local/share/journo/` (follows XDG Base Directory Specification)
 - **Environment Variable**: `JOURNAL_DIR` - override default storage location
 - **Database File**: `$JOURNAL_DIR/journal.db` - Single DuckDB database file
 - **Temp Files**: Created on-demand with `.md` extension for editor syntax highlighting

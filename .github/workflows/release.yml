@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-aarch64-darwin:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Nix
+      uses: cachix/install-nix-action@v27
+      with:
+        github_access_token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Enable flakes
+      run: |
+        echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+        mkdir -p ~/.config/nix
+    
+    - name: Build with Nix
+      run: nix build .#journo
+    
+    - name: Upload binary to release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ./result/bin/journo
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -16,6 +16,28 @@
           inherit system;
           overlays = [ (import rust-overlay) ];
         };
+        
+        journo = pkgs.rustPlatform.buildRustPackage {
+          pname = "journo";
+          version = "0.0.1";
+          
+          src = pkgs.lib.cleanSource ./.;
+          
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+          
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [ duckdb ];
+          
+          meta = with pkgs.lib; {
+            description = "TUI Bullet Journal";
+            homepage = "https://github.com/mknaw/journo";
+            license = licenses.mit;
+            maintainers = [ ];
+            platforms = platforms.unix;
+          };
+        };
       in
       with pkgs;
       {
@@ -39,6 +61,8 @@
           };
         };
 
+        packages.default = journo;
+        
         devShell = mkShell {
           buildInputs = self.checks.${system}.pre-commit-check.enabledPackages ++ [
             (rust-bin.stable.latest.minimal.override {
